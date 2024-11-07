@@ -2,7 +2,7 @@ project:
   type: website
 
 website:
-  title: "GEO511_FinalProject_Weather Sites"
+  title: "GEO511_FinalProject"
   navbar:
     left:
       - href: index.qmd
