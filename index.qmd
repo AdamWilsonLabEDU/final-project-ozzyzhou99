@@ -1,120 +1,279 @@
 ---
-title: "My Final Project Template"
-author: Zhongyu Zhou
-subtitle: Subtitle here if desired
+title: "Assessing the Accessibility and Equity of Public Green Spaces in Buffalo"
+author: "Zhongyu Zhou"
+subtitle: "A Spatial Analysis of Urban Green Space Distribution"
 date: today
 date-format: long
+format: 
+  html:
+    embed-resources: true
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    theme: cosmo
+    navbar:
+      left:
+        - text: "Home"
+          href: index.html
 ---
 
 # Introduction
 
-\[\~ 200 words\]
+Public green spaces play a vital role in urban environments, contributing to both physical and mental health of residents. In the context of increasing urbanization and environmental challenges, the accessibility of these spaces directly impacts quality of life. However, green space distribution in cities often shows disparities, potentially creating inequitable access across different communities.
 
-Clearly stated background and questions / hypotheses / problems being addressed. Sets up the analysis in an interesting and compelling way. Include figures if you like.
+This study focuses on Buffalo, New York, analyzing the spatial distribution and accessibility of public green spaces. The primary research questions are:
+
+1. How accessible are public green spaces to Buffalo residents within a 5-minute walking distance?
+2. Are there significant disparities in green space accessibility across different neighborhoods?
+3. What is the relationship between income levels and green space accessibility?
 
 # Materials and methods
 
-\[\~ 200 words\]
+This analysis integrates data from two primary sources:
 
-Narrative: Clear narrative description of the data sources and methods. Includes data from at least two sources that were integrated / merged in R.
+1. OpenStreetMap (OSM): Provides spatial data on public green spaces, including parks and gardens
+2. American Community Survey (ACS): Supplies demographic information including population density and median income at the census tract level
 
-Code: The code associated with the project is well organized and easy to follow. Demonstrates mastery of R graphics and functions.
+The methodology follows these key steps:
 
-Data: The underlying data are publicly accessible via the web and downloaded/accessed within the Rmd script. If you want to use your own data, you must make it available on a website (e.g. Figshare) so that others are able to re-run your code.
+1. Data Collection and Processing:
+   - Extract green space polygons from OSM using the 'osmdata' package
+   - Obtain demographic data using the 'tidycensus' package
+   - Transform all spatial data to a consistent coordinate reference system
 
-You can do bullets like this:
+2. Accessibility Analysis:
+   - Calculate 400-meter (5-minute walking distance) buffers around green spaces
+   - Compute accessibility scores based on the intersection of these buffers with census tracts
+   - Analyze the relationship between accessibility and demographic factors
 
--   The first most important thing
--   The second most important thing
--   The third most important thing
-
-You can do numbers like this:
-
-1.  The first most important thing
-2.  The second most important thing
-3.  The third most important thing
-
-See <http://rmarkdown.rstudio.com/> for all the amazing things you can do.
-
-Here's my first code chunk.
-
-```{r}
-x=3+4
-```
-
-Refer to output in your narrative like this: x=`r x` .
-
-Load any required packages in a code chunk (you may need to install some packages):
-
-```{r, message=F, warning=F}
+```{r setup, message=F, warning=F}
+library(osmdata)
+library(sf)
+library(ggplot2)
 library(tidyverse)
-library(leaflet)
+library(tidycensus)
+library(tigris)
+library(units)
 library(kableExtra)
-library(htmlwidgets)
-library(widgetframe)
-knitr::opts_chunk$set(widgetframe_widgets_dir = 'widgets' ) 
-knitr::opts_chunk$set(cache=TRUE)  # cache the results for quick compiling
+
+# Set Census API key
+census_api_key("71ee368dd6a9d472f0ba814e6f90b8566a1a7192")
 ```
 
-## Download and clean all required data
+## Data Collection and Processing
 
-```{r}
-n=20
-data=data.frame(x=runif(n,-180,180),
-                y=runif(n,-60,60),
-                size = runif(n, 5, 20),
-                category = factor(
-                  sample(letters[1:5], n, replace = TRUE)
-                  ),
-                value = rnorm(n))
+```{r data-collection, message=FALSE, warning=FALSE, results='hide'}
+# Get Buffalo city boundary
+buffalo_boundary <- places(state = "NY") %>%
+  filter(NAME == "Buffalo") %>%
+  st_transform(4326)
+
+# Get green spaces data
+buffalo_bbox <- st_bbox(buffalo_boundary)
+buffalo_green <- opq(buffalo_bbox) %>%
+  add_osm_feature(key = "leisure", value = c("park", "garden")) %>%
+  osmdata_sf()
+
+# Process green spaces
+green_spaces <- buffalo_green$osm_polygons %>%
+  select(osm_id, name) %>%
+  st_transform(4326) %>%
+  st_intersection(buffalo_boundary)
+
+# Get demographic data
+buffalo_pop <- get_acs(
+  geography = "tract",
+  variables = c(
+    population = "B01003_001",
+    median_income = "B19013_001"
+  ),
+  state = "NY",
+  county = "Erie",
+  year = 2020,
+  geometry = TRUE
+) %>%
+  select(-moe) %>%
+  pivot_wider(
+    id_cols = c(GEOID, geometry),
+    names_from = "variable",
+    values_from = "estimate"
+  ) %>%
+  st_as_sf() %>%
+  st_transform(4326) %>%
+  st_intersection(buffalo_boundary)
 ```
 
-```{r, results='asis'}
-data %>% 
-  slice(1:10) %>% #show only 1:n rows
-  kable(digits=2,align="c")%>% #make table and round to two digits
-  kable_styling(bootstrap_options = 
-                  c("striped", "hover", "condensed", "responsive")) #apply other formatting
-```
+## Accessibility Analysis
 
-Add any additional processing steps here.
+```{r accessibility, message=FALSE, warning=FALSE, results='hide'}
+calculate_accessibility <- function(tract, green_spaces, buffer_distance = 400) {
+  tryCatch({
+    # Convert to projected coordinate system
+    tract_proj <- st_transform(st_geometry(tract), 32617)
+    green_spaces_proj <- st_transform(green_spaces, 32617)
+    
+    # Get population data
+    tract_population <- tract$population
+    tract_area_km2 <- as.numeric(st_area(tract_proj)) / 1000000  # 转换到平方公里
+    population_density <- tract_population / tract_area_km2
+    
+    # Create a buffer
+    tract_buffer <- st_buffer(tract_proj, buffer_distance)
+    
+    # Find accessible green space
+    intersecting <- st_intersects(tract_buffer, green_spaces_proj)
+    
+    if(length(unlist(intersecting)) == 0) {
+      return(0)
+    }
+    
+    # Get the intersecting green space
+    accessible_gs <- green_spaces_proj[unlist(intersecting),]
+    
+    # Calculate intersection
+    intersection <- st_intersection(tract_buffer, accessible_gs)
+    
+    # Basic calculations
+    intersection_area <- sum(st_area(intersection))
+    tract_area <- st_area(tract_proj)
+    
+    # 1. Basic coverage
+    coverage_ratio <- as.numeric(intersection_area) / as.numeric(tract_area)
+    
+    # 2. Green space size weight
+    gs_sizes <- st_area(accessible_gs)
+    size_weight <- 1 + log1p(as.numeric(gs_sizes) / min(as.numeric(gs_sizes)))
+    
+    # 3. Distance weight
+    distances <- st_distance(tract_proj, accessible_gs)
+    distance_weights <- 1 - (as.numeric(distances) / buffer_distance)
+    distance_weights[distance_weights < 0] <- 0
+    
+    # 4. Population density weight
+    # Use an inverse relationship: the higher the population density, the greater the demand for green space
+    density_factor <- 1 + log1p(population_density / mean(buffalo_pop$population / 
+                                                        (as.numeric(st_area(buffalo_pop)) / 1000000)))
+    
+    # Comprehensive calculation
+    # When the population density is high, the same green space coverage will get a lower score
+    weighted_score <- coverage_ratio * mean(size_weight * distance_weights) / density_factor
+    
+    # Normalize to between 0 and 1
+    return(min(1, weighted_score))
+    
+  }, error = function(e) {
+    warning(paste("计算错误:", e$message))
+    return(0)
+  })
+}
+
+buffalo_pop$accessibility <- sapply(
+  1:nrow(buffalo_pop),
+  function(i) {
+    if(i %% 10 == 0) cat(sprintf("Processing tract %d of %d\n", i, nrow(buffalo_pop)))
+    calculate_accessibility(buffalo_pop[i,], green_spaces)
+  }
+)
+```
 
 # Results
 
-\[\~200 words\]
+Our analysis reveals several key findings about green space accessibility in Buffalo:
 
-Tables and figures (maps and other graphics) are carefully planned to convey the results of your analysis. Intense exploration and evidence of many trials and failures. The author looked at the data in many different ways before coming to the final presentation of the data.
-
-Show tables, plots, etc. and describe them.
-
-```{r, fig.width=6, fig.height=3, fig.cap="Map of completely random data"}
-m <- leaflet(data) %>% 
-  addTiles() %>% 
-  addCircleMarkers(~x, ~y, radius = ~size,color = ~as.factor(category)) %>% 
-  addPopups(~x[2], ~y[2], "Random popup")
-m  # a map with the default OSM tile layer
+```{r results, fig.width=10, fig.height=8}
+# Create accessibility map
+ggplot() +
+  geom_sf(data = buffalo_pop, aes(fill = accessibility)) +
+  scale_fill_viridis_c(
+    name = "Accessibility Score",
+    limits = c(0, 1),
+    labels = scales::percent,
+    na.value = "grey50"
+  ) +
+  geom_sf(data = green_spaces, fill = "darkgreen", alpha = 0.3) +
+  theme_minimal() +
+  labs(
+    title = "Green Space Accessibility in Buffalo",
+    subtitle = "Percentage of area within 5-minute walking distance of green spaces"
+  )
 ```
 
-```{r}
-data %>% 
-  ggplot(aes(x=x,y=y,col=category))+
-  geom_point()
-```
+```{r income-analysis, message=FALSE, warning=FALSE}
+# Data cleaning and outlier handling
+buffalo_pop_clean <- buffalo_pop %>%
+  # Remove outliers in income
+  filter(!is.na(median_income)) %>%
+  filter(median_income > quantile(median_income, 0.01, na.rm = TRUE) &
+         median_income < quantile(median_income, 0.99, na.rm = TRUE)) %>%
+  # Remove extreme values ​​of accessibility
+  filter(accessibility > quantile(accessibility, 0.01, na.rm = TRUE) &
+         accessibility < quantile(accessibility, 0.99, na.rm = TRUE))
 
-### Dygraphs Example
+# Create income quantiles
+buffalo_pop_clean <- buffalo_pop_clean %>%
+  mutate(
+    income_quintile = cut(median_income,
+                         breaks = quantile(median_income, probs = seq(0, 1, 0.2), na.rm = TRUE),
+                         labels = c("Lowest 20%", "20-40%", "40-60%", "60-80%", "Highest 20%"),
+                         include.lowest = TRUE)
+  )
 
-```{r}
-library(dygraphs)
-dygraph(nhtemp, main = "New Haven Temperatures") |> 
-  dyRangeSelector(dateWindow = c("1920-01-01", "1960-01-01")) 
+# Calculate the average accessibility for each income quantile
+quintile_summary <- buffalo_pop_clean %>%
+  group_by(income_quintile) %>%
+  summarise(
+    mean_accessibility = mean(accessibility, na.rm = TRUE),
+    median_accessibility = median(accessibility, na.rm = TRUE),
+    n_tracts = n()
+  )
+
+# Create a scatter plot
+improved_income_plot <- ggplot(buffalo_pop_clean, 
+                             aes(x = median_income, y = accessibility)) +
+  # Add scatter points
+  geom_point(aes(color = income_quintile), 
+             shape = 18,  
+             size = 3) +
+  # Add a trend line
+  geom_smooth(method = "loess", color = "black", linetype = "dashed") +
+  scale_x_continuous(labels = scales::dollar_format(),
+                    breaks = scales::pretty_breaks(n = 8)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                    limits = c(0, 1)) +
+  scale_color_manual(values = c("#4B0082", "#4682B4", "#2E8B57", "#FFA500", "#DC143C")) +
+  theme_minimal() +
+  labs(
+    title = "Relationship between Income and Green Space Accessibility",
+    subtitle = "With smoothed trend line",
+    x = "Median Household Income",
+    y = "Green Space Accessibility Score",
+    color = "Income Quintile" 
+  )
+
+print(improved_income_plot)
+
+# Display quantile statistics
+knitr::kable(quintile_summary, 
+             caption = "Accessibility Statistics by Income Quintile") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
 ```
 
 # Conclusions
 
-\[\~200 words\]
+The results show a complex pattern of green space accessibility in Buffalo:
 
-Clear summary adequately describing the results and putting them in context. Discussion of further questions and ways to continue investigation.
+1. The spatial distribution is uneven, with higher accessibility in the Northeast and Midwest and lower accessibility in the Central and Southeast.
+
+2. Accessibility has a U-shaped relationship with income, with middle-income communities having the lowest accessibility.
+
+3. Accessibility is higher around major parks and lower in densely populated areas.
+
+Our improved approach takes into account spatial coverage and population density, revealing nuances in green space accessibility that go beyond simple income differences. Future research could incorporate road network analysis, historical development patterns, other socioeconomic factors, green space quality, and seasonal changes. These findings could inform policies for more equitable green space allocation, especially improving accessibility in middle-income communities while also taking into account low- and high-income communities.
 
 # References
 
-All sources are cited in a consistent manner
+1. Buffalo Green Space Data: OpenStreetMap Contributors
+2. Demographic Data: U.S. Census Bureau, American Community Survey 2016-2020
+3. Spatiotemporal patterns and inequity of urban green space accessibility study
+4. Analysis of urban green space accessibility and distribution inequity in the City of Chicago
+5. GIS-based analysis of the urban green space accessibility in Craiova city, Romania
