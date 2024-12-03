@@ -5062,12 +5062,7 @@ border: 0;
 <section id="introduction" class="level1">
 <h1>Introduction</h1>
 <p>Public green spaces play a vital role in urban environments, contributing to both physical and mental health of residents. In the context of increasing urbanization and environmental challenges, the accessibility of these spaces directly impacts quality of life. However, green space distribution in cities often shows disparities, potentially creating inequitable access across different communities.</p>
-<p>This study focuses on Buffalo, New York, analyzing the spatial distribution and accessibility of public green spaces. The primary research questions are:</p>
-<ol type="1">
-<li>How accessible are public green spaces to Buffalo residents within a 5-minute walking distance?</li>
-<li>Are there significant disparities in green space accessibility across different neighborhoods?</li>
-<li>What is the relationship between income levels and green space accessibility?</li>
-</ol>
+<p>This study focuses on Buffalo, New York, analyzing the spatial distribution and accessibility of public green spaces. The primary research questions are: 1. How accessible are public green spaces to Buffalo residents within a 5-minute walking distance? 2. Are there significant disparities in green space accessibility across different neighborhoods? 3. What is the relationship between income levels and green space accessibility?</p>
 </section>
 <section id="materials-and-methods" class="level1">
 <h1>Materials and methods</h1>
@@ -5269,7 +5264,7 @@ border: 0;
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(median_income)) <span class="sc">%&gt;%</span></span>
 <span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(median_income <span class="sc">&gt;</span> <span class="fu">quantile</span>(median_income, <span class="fl">0.01</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">&amp;</span></span>
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>         median_income <span class="sc">&lt;</span> <span class="fu">quantile</span>(median_income, <span class="fl">0.99</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Remove extreme values ​​of accessibility</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Remove extreme values of accessibility</span></span>
 <span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(accessibility <span class="sc">&gt;</span> <span class="fu">quantile</span>(accessibility, <span class="fl">0.01</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">&amp;</span></span>
 <span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>         accessibility <span class="sc">&lt;</span> <span class="fu">quantile</span>(accessibility, <span class="fl">0.99</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>))</span>
 <span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
