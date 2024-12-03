@@ -22,7 +22,6 @@ format:
 Public green spaces play a vital role in urban environments, contributing to both physical and mental health of residents. In the context of increasing urbanization and environmental challenges, the accessibility of these spaces directly impacts quality of life. However, green space distribution in cities often shows disparities, potentially creating inequitable access across different communities.
 
 This study focuses on Buffalo, New York, analyzing the spatial distribution and accessibility of public green spaces. The primary research questions are:
-
 1. How accessible are public green spaces to Buffalo residents within a 5-minute walking distance?
 2. Are there significant disparities in green space accessibility across different neighborhoods?
 3. What is the relationship between income levels and green space accessibility?
@@ -205,7 +204,7 @@ buffalo_pop_clean <- buffalo_pop %>%
   filter(!is.na(median_income)) %>%
   filter(median_income > quantile(median_income, 0.01, na.rm = TRUE) &
          median_income < quantile(median_income, 0.99, na.rm = TRUE)) %>%
-  # Remove extreme values ​​of accessibility
+  # Remove extreme values of accessibility
   filter(accessibility > quantile(accessibility, 0.01, na.rm = TRUE) &
          accessibility < quantile(accessibility, 0.99, na.rm = TRUE))
 
