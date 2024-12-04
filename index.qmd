@@ -19,32 +19,38 @@ format:
 
 # Introduction
 
-Public green spaces play a vital role in urban environments, contributing to both physical and mental health of residents. In the context of increasing urbanization and environmental challenges, the accessibility of these spaces directly impacts quality of life. However, green space distribution in cities often shows disparities, potentially creating inequitable access across different communities.
+In urban settings, public green areas are essential because they improve inhabitants' physical and emotional well-being. The accessibility of these areas has a direct impact on quality of life in light of growing urbanization and environmental issues. However, there are frequently differences in the distribution of green space in cities, which could lead to unequal access for various people.
 
-This study focuses on Buffalo, New York, analyzing the spatial distribution and accessibility of public green spaces. The primary research questions are:
-1. How accessible are public green spaces to Buffalo residents within a 5-minute walking distance?
-2. Are there significant disparities in green space accessibility across different neighborhoods?
-3. What is the relationship between income levels and green space accessibility?
+This study examines the accessibility and spatial distribution of public green spaces in Buffalo, New York. The following are the main research questions: 
+1. How accessible are public green areas to Buffalo residents who live within a 400-meter (5-minute) walking distance?
+2. How does the accessibility of green spaces change in various census tracts?
+3. How does the accessibility of green spaces at the census tract level relate to median household income?
+
 
 # Materials and methods
 
 This analysis integrates data from two primary sources:
 
-1. OpenStreetMap (OSM): Provides spatial data on public green spaces, including parks and gardens
-2. American Community Survey (ACS): Supplies demographic information including population density and median income at the census tract level
+1. OpenStreetMap (OSM): Provides spatial data on public green spaces, specifically parks and gardens
+2. American Community Survey (ACS) 2020: Supplies census tract level demographic information including population counts and median household income
 
 The methodology follows these key steps:
 
 1. Data Collection and Processing:
-   - Extract green space polygons from OSM using the 'osmdata' package
-   - Obtain demographic data using the 'tidycensus' package
-   - Transform all spatial data to a consistent coordinate reference system
+   - Extract green space polygons from OSM using the 'osmdata' package, filtering for leisure areas tagged as parks and gardens
+   - Obtain demographic data (population and median income) using the 'tidycensus' package at the census tract level
+   - Transform and intersect all spatial data with Buffalo city boundary using a consistent coordinate reference system (4326)
 
 2. Accessibility Analysis:
-   - Calculate 400-meter (5-minute walking distance) buffers around green spaces
-   - Compute accessibility scores based on the intersection of these buffers with census tracts
-   - Analyze the relationship between accessibility and demographic factors
-
+   - Calculate 400-meter buffers around green spaces (representing 5-minute walking distance)
+   - Compute accessibility scores for each census tract using a weighted approach that considers:
+      * Basic coverage ratio of green spaces
+      * Green space size weights (logarithmically scaled)
+      * Distance weights (linear decay with distance)
+      * Population density adjustment factor
+   - Normalize accessibility scores to a 0-1 scale, where higher scores indicate better accessibility
+   - Analyze the relationship between accessibility scores and median household income using income quintiles
+   
 ```{r setup, message=F, warning=F}
 library(osmdata)
 library(sf)
@@ -161,7 +167,7 @@ calculate_accessibility <- function(tract, green_spaces, buffer_distance = 400) 
     return(min(1, weighted_score))
     
   }, error = function(e) {
-    warning(paste("计算错误:", e$message))
+    warning(paste("calculation mistake:", e$message))
     return(0)
   })
 }
@@ -180,6 +186,21 @@ buffalo_pop$accessibility <- sapply(
 Our analysis reveals several key findings about green space accessibility in Buffalo:
 
 ```{r results, fig.width=10, fig.height=8}
+# Create income distribution map
+ggplot() +
+  geom_sf(data = buffalo_pop, aes(fill = median_income)) +
+  scale_fill_viridis_c(
+    name = "Median Income",
+    labels = scales::dollar_format(),
+    na.value = "grey50",
+    option = "magma"  # different color scheme from accessibility map
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Median Household Income Distribution in Buffalo",
+    subtitle = "Based on Census Tract Level Data"
+  )
+
 # Create accessibility map
 ggplot() +
   geom_sf(data = buffalo_pop, aes(fill = accessibility)) +
@@ -261,18 +282,23 @@ knitr::kable(quintile_summary,
 
 The results show a complex pattern of green space accessibility in Buffalo:
 
-1. The spatial distribution is uneven, with higher accessibility in the Northeast and Midwest and lower accessibility in the Central and Southeast.
+1. There is an unequal spatial distribution, with the Central and Southeast having lesser accessibility and the Northeast and Midwest having better accessibility.
 
-2. Accessibility has a U-shaped relationship with income, with middle-income communities having the lowest accessibility.
+2. The link between accessibility and income is U-shaped, with middle-income communities having the least accessibility.
 
-3. Accessibility is higher around major parks and lower in densely populated areas.
+3. Accessibility is worse in heavily crowded areas and better around large parks.
 
-Our improved approach takes into account spatial coverage and population density, revealing nuances in green space accessibility that go beyond simple income differences. Future research could incorporate road network analysis, historical development patterns, other socioeconomic factors, green space quality, and seasonal changes. These findings could inform policies for more equitable green space allocation, especially improving accessibility in middle-income communities while also taking into account low- and high-income communities.
+Our analysis, which takes into account population density and spatial coverage, shows intricate trends in the accessibility of green spaces at various income levels. Future studies should look at other socioeconomic characteristics, road networks, and the quality of green spaces. Urban planning plans may be influenced by these findings to distribute green space more fairly among all communities.
 
 # References
 
-1. Buffalo Green Space Data: OpenStreetMap Contributors
-2. Demographic Data: U.S. Census Bureau, American Community Survey 2016-2020
-3. Spatiotemporal patterns and inequity of urban green space accessibility study
-4. Analysis of urban green space accessibility and distribution inequity in the City of Chicago
-5. GIS-based analysis of the urban green space accessibility in Craiova city, Romania
+1. Xing, L., Liu, Y., & Liu, X. (2018). Measuring spatial disparity in accessibility with a multi-mode method based on park green spaces classification in Wuhan, China. Applied Geography, 94, 251-261.
+2. Liu, W., Chen, W., & Dong, C. (2017). Spatial decay of recreational services of urban parks: Characteristics and influencing factors. Urban Forestry & Urban Greening, 25, 130-138.
+3. Tu, X., Huang, G., & Wu, J. (2018). Contrary to common observations in the west, urban park access is only weakly related to neighborhood socioeconomic conditions in Beijing, China. Sustainability, 10(4), 1115.
+4. Yu, S., Zhu, X., & He, Q. (2020). An assessment of urban park access using house-level data in urban China: Through the lens of social equity. International journal of environmental research and public health, 17(7), 2349.
+5. Liu, D., Kwan, M. P., & Kan, Z. (2021). Analysis of urban green space accessibility and distribution inequity in the City of Chicago. Urban Forestry & Urban Greening, 59, 127029.
+6. Kim, J., & Nicholls, S. (2016). Using geographically weighted regression to explore the equity of public open space distributions. Journal of Leisure Research, 48(2), 105-133.
+7. Chen, Y., Liu, T., & Liu, W. (2016). Increasing the use of large-scale public open spaces: A case study of the North Central Axis Square in Shenzhen, China. Habitat International, 53, 66-77.
+8. Nesbitt, L., Meitner, M. J., Girling, C., Sheppard, S. R., & Lu, Y. (2019). Who has access to urban vegetation? A spatial analysis of distributional green equity in 10 US cities. Landscape and Urban Planning, 181, 51-79.
+9. Rigolon, A., Browning, M. H., Lee, K., & Shin, S. (2018). Access to urban green space in cities of the Global South: A systematic literature review. Urban Science, 2(3), 67.
+10. Wei, F. (2017). Greener urbanization? Changing accessibility to parks in China. Landscape and Urban Planning, 157, 542-552.
